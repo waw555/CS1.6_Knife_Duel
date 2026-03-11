@@ -37,6 +37,7 @@ enum _:max_cvars {
 	CVAR_PROTECTION,
 	CVAR_ANNOUNCE,
 	CVAR_RESET,
+	CVAR_DUELHP,
 };
 new g_Pcvar[max_cvars];
 
@@ -63,6 +64,7 @@ public plugin_init() {
 	g_Pcvar[CVAR_MAXDISTANCE] = register_cvar("kd_maxdistance", "99999");
 	g_Pcvar[CVAR_ANNOUNCE] = register_cvar("kd_announce", "1");
 	g_Pcvar[CVAR_RESET] = register_cvar("kd_resethp", "1");
+	g_Pcvar[CVAR_DUELHP] = register_cvar("kd_duelhp", "200");
 	g_iTimer = get_pcvar_num(g_Pcvar[CVAR_TIMER]);
 	g_iMaxPlayers = get_maxplayers();
 	g_iMsgRoundTime = get_user_msgid("RoundTime");
@@ -73,8 +75,46 @@ public plugin_init() {
 
 public plugin_cfg()
 {
+	ensure_config_exists();
 	server_cmd("exec addons/amxmodx/configs/plugins/knife_duel.cfg");
 	server_exec();
+}
+
+stock ensure_config_exists()
+{
+	new const szConfigPath[] = "addons/amxmodx/configs/plugins/knife_duel.cfg";
+
+	if(file_exists(szConfigPath))
+		return;
+
+	write_file(szConfigPath, "; Knife Duel configuration", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Сколько ударов ножом по стене нужно сделать для вызова на дуэль", -1);
+	write_file(szConfigPath, "kd_knifecount 1", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Время (в секундах) на завершение дуэли, иначе оба игрока погибают", -1);
+	write_file(szConfigPath, "kd_preparetime 30", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Денежная награда победителю дуэли", -1);
+	write_file(szConfigPath, "kd_reward 1000", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Притягивание дуэлянтов друг к другу, если они слишком далеко", -1);
+	write_file(szConfigPath, "; 0 - выключено, 1 - включено", -1);
+	write_file(szConfigPath, "kd_protection 1", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Максимальная дистанция между дуэлянтами при включенной защите", -1);
+	write_file(szConfigPath, "kd_maxdistance 99999", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Сообщать живым игрокам о возможности дуэли", -1);
+	write_file(szConfigPath, "; 0 - выключено, 1 - включено", -1);
+	write_file(szConfigPath, "kd_announce 1", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Сбрасывать здоровье дуэлянтов до значения kd_duelhp при старте дуэли", -1);
+	write_file(szConfigPath, "; 0 - выключено, 1 - включено", -1);
+	write_file(szConfigPath, "kd_resethp 1", -1);
+	write_file(szConfigPath, "", -1);
+	write_file(szConfigPath, "; Уровень здоровья для дуэлянтов при включенном kd_resethp", -1);
+	write_file(szConfigPath, "kd_duelhp 200", -1);
 }
 
 public cmdForceDuel(id, level, cid)
@@ -367,8 +407,13 @@ public fnStartDuel()
 	
 	if(get_pcvar_num(g_Pcvar[CVAR_RESET]))
 	{
-		set_pev(g_iChallenged, pev_health, 200.0);
-		set_pev(g_iChallenger, pev_health, 200.0);
+		new iDuelHP = get_pcvar_num(g_Pcvar[CVAR_DUELHP]);
+		if(iDuelHP < 1)
+			iDuelHP = 1;
+
+		new Float:fDuelHP = float(iDuelHP);
+		set_pev(g_iChallenged, pev_health, fDuelHP);
+		set_pev(g_iChallenger, pev_health, fDuelHP);
 	}
 	
 	set_task(1.0, "taskDuelThink", 'x', "", 0, "b", 0);
