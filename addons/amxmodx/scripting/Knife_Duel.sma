@@ -40,6 +40,8 @@ enum _:max_cvars {
 new g_Pcvar[max_cvars];
 
 new g_iMaxPlayers;
+new g_iMsgRoundTime;
+new g_iMsgStatusIcon;
 
 public plugin_init() {
 	
@@ -61,6 +63,8 @@ public plugin_init() {
 	g_Pcvar[CVAR_ANNOUNCE] = register_cvar("kd_announce", "1");
 	g_Pcvar[CVAR_RESET] = register_cvar("kd_resethp", "1");
 	g_iMaxPlayers = get_maxplayers();
+	g_iMsgRoundTime = get_user_msgid("RoundTime");
+	g_iMsgStatusIcon = get_user_msgid("StatusIcon");
 	register_event("RoundTime", "eNewRound", "bc");
 	register_concmd("kd_forceduel", "cmdForceDuel", ADMIN_BAN, "- Запустить ножевую дуэль, если в любой команде остался 1 игрок");
 }
@@ -126,6 +130,7 @@ public client_disconnected(id)
 		show_menu(g_iChallenged, 0, "^n", 1);
 		show_menu(g_iChallenger, 0, "^n", 1);
 		remove_task('x');
+		remove_task('t');
 		i_Counter = false;
 	}
 }
@@ -332,8 +337,10 @@ public fnStartDuel()
 	}
 	
 	set_task(1.0, "taskDuelThink", 'x', "", 0, "b", 0);
+	set_task(1.0, "update_timer", 't', "", 0, "b", 0);
 	client_cmd(0,"mp3 play sound/ms/knife_duel_start");
 	server_cmd("amx_throwknives 0");
+	show_duel_weapon_icon(1);
 	
 	if(get_pcvar_num(g_Pcvar[CVAR_PROTECTION]))
 		g_bProtect = true;
@@ -343,19 +350,21 @@ public taskDuelThink(id, opponent)
 {
 	if(g_iTimer > 0)
 	{
-		set_hudmessage(255, 100, 0, -1.0, 0.3, 0, 6.0, 1.0, 0.1, 0.9, 1);
-		show_hudmessage(0, "У вас осталось: %d сек.", g_iTimer--);
+		set_dhudmessage(255, 100, 0, -1.0, 0.02, 0, 0.0, 1.1, 0.0, 0.0);
+		show_dhudmessage(0, "У вас осталось: %d сек.", g_iTimer--);
 		}
 	
 	else
 	{
-		set_hudmessage(255, 100, 0, -1.0, 0.3, 0, 6.0, 1.0, 0.1, 0.5, 1);
-		show_hudmessage(0, "Вы не успели вовремя!");
+		set_dhudmessage(255, 100, 0, -1.0, 0.02, 0, 0.0, 1.1, 0.0, 0.0);
+		show_dhudmessage(0, "Вы не успели вовремя!");
 		
 		g_iTimer = get_pcvar_num(g_Pcvar[CVAR_TIMER]);
 		remove_task('x');
+		remove_task('t');
 		g_bInChallenge = false;
 		g_bProtect = false;
+		show_duel_weapon_icon(0);
 		if(is_user_alive(g_iChallenged)) user_kill(g_iChallenged);
 		if( is_user_alive(g_iChallenger))user_kill(g_iChallenger);
 		//client_cmd(0, "kill");
@@ -371,16 +380,48 @@ public taskDuelThink(id, opponent)
 	}
 }
 
+public update_timer()
+{
+	new iTime = g_iTimer;
+	if(iTime < 0)
+		iTime = 0;
+
+	message_begin(MSG_ALL, g_iMsgRoundTime);
+	write_short(iTime);
+	message_end();
+}
+
 
 public logevent_RoundEnd()
 {
 	g_bInChallenge = false;
 	g_bProtect = false;
 	remove_task('x');
+	remove_task('t');
+	show_duel_weapon_icon(0);
 	server_cmd("amx_throwknives 1");
 	show_menu(g_iChallenged, 0, "^n", 1);
 	show_menu(g_iChallenger, 0, "^n", 1);
 	client_cmd(0,"mp3 stop");
+}
+
+stock show_duel_weapon_icon(iEnable)
+{
+	new iMode = iEnable ? 1 : 0;
+
+	for(new i = 1 ; i <= g_iMaxPlayers ; i++)
+	{
+		if(!is_user_connected(i))
+			continue;
+
+		message_begin(MSG_ONE, g_iMsgStatusIcon, _, i);
+		write_byte(iMode);
+		write_string("d_knife");
+		write_byte(255);
+		write_byte(160);
+		write_byte(0);
+		message_end();
+	}
 }
 
 stock fm_entity_set_aim(id, ent, bone = 0)
