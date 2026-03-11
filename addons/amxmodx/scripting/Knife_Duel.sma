@@ -94,7 +94,16 @@ public cmdForceDuel(id, level, cid)
 		return PLUGIN_HANDLED;
 	}
 
-	fnChallenge(iChallenger, iOpponent);
+	g_iChallenger = iChallenger;
+	g_iChallenged = iOpponent;
+	g_bInChallenge = true;
+
+	new szName[32], szOppName[32];
+	get_user_name(iChallenger, szName, sizeof szName - 1);
+	get_user_name(iOpponent, szOppName, sizeof szOppName - 1);
+
+	client_print(0, print_chat, " [Knife Duel] Администратор принудительно запустил дуэль: %s vs %s.", szName, szOppName);
+	fnStartDuel();
 	client_print(id, print_console, "[Knife Duel] Принудительная дуэль запущена.");
 
 	return PLUGIN_HANDLED;
