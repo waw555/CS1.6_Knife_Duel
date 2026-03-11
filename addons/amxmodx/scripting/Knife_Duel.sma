@@ -40,7 +40,6 @@ new g_Pcvar[max_cvars];
 new g_iMaxPlayers;
 new g_iMsgRoundTime;
 new g_iMsgStatusIcon;
-new g_iMsgMoney;
 
 public plugin_init() {
 	
@@ -66,7 +65,6 @@ public plugin_init() {
 	g_iMaxPlayers = get_maxplayers();
 	g_iMsgRoundTime = get_user_msgid("RoundTime");
 	g_iMsgStatusIcon = get_user_msgid("StatusIcon");
-	g_iMsgMoney = get_user_msgid("Money");
 	register_event("RoundTime", "eNewRound", "bc");
 	register_concmd("kd_forceduel", "cmdForceDuel", ADMIN_BAN, "- Запустить ножевую дуэль, если в любой команде остался 1 игрок");
 }
@@ -337,12 +335,7 @@ stock give_money(id, amount)
 	if(iGranted <= 0)
 		return 0;
 
-	set_member(id, m_iAccount, iMoney);
-
-	message_begin(MSG_ONE, g_iMsgMoney, _, id);
-	write_long(iMoney);
-	write_byte(1);
-	message_end();
+	rg_add_account(id, iGranted, AS_ADD);
 
 	return iGranted;
 }
