@@ -30,9 +30,8 @@ new g_iTimer;
 new i_Counter = true;
 
 enum _:max_cvars {
-	
-	CVAR_COUNT = 1,
-	CVAR_TIMER = 30,
+	CVAR_COUNT,
+	CVAR_TIMER,
 	CVAR_MAXDISTANCE,
 	CVAR_PROTECTION,
 	CVAR_ANNOUNCE,
@@ -50,9 +49,10 @@ public plugin_init() {
 	register_forward(FM_EmitSound, "fwd_EmitSound", 1);
 	register_forward(FM_PlayerPreThink, "fwd_PlayerPreThink_post", 1);
 	RegisterHam(Ham_Killed, "player", "fwd_Killed", 1);
-	unregister_forward(FM_Spawn, g_iFwdSpawn, 1);
 	
 	register_logevent("logevent_RoundEnd", 2, "1=Round_End", "1=Round_Draw");
+	register_logevent("logevent_BombAction", 3, "2=Planted_The_Bomb");
+	register_logevent("logevent_BombAction", 3, "2=Defused_The_Bomb");
 	
 	g_Pcvar[CVAR_COUNT] = register_cvar("kd_knifecount", "1");
 	g_Pcvar[CVAR_TIMER] = register_cvar("kd_preparetime", "30");
@@ -81,7 +81,7 @@ public client_disconnected(id)
 		g_bProtect = false;
 		show_menu(g_iChallenged, 0, "^n", 1);
 		show_menu(g_iChallenger, 0, "^n", 1);
-		remove_task('y');
+		remove_task('x');
 		i_Counter = false;
 	}
 }
@@ -103,9 +103,11 @@ public fwd_Spawn(ent)
 		else if(!vec_null(g_vKnifeOrigin[0]) && vec_null(g_vKnifeOrigin[1]))
 		{
 			static Float:vTmp[3];
+			static Float:fDistance;
 			pev(ent, pev_origin, vTmp);
+			fDistance = vector_distance(g_vKnifeOrigin[0], vTmp);
 			
-			if((300.0 <= vector_distance(g_vKnifeOrigin[0], vTmp) < 1200.0))
+			if(fDistance >= 300.0 && fDistance < 1200.0)
 				g_vKnifeOrigin[1] = vTmp;
 		}
 	}
@@ -227,6 +229,12 @@ public Menu_Main_Handler(id, menu, item)
 {
 	if(!is_user_connected(id))
 		return 0;
+
+	if(item < 0)
+	{
+		menu_destroy(menu);
+		return 0;
+	}
 	
 	new szData[6], iAccess, iCallBack;
 	menu_item_getinfo(menu, item, iAccess, szData, sizeof szData - 1, _, _, iCallBack);
@@ -254,6 +262,8 @@ public Menu_Main_Handler(id, menu, item)
 			i_Counter = false;
 		}
 	}
+
+	menu_destroy(menu);
 	return 1;
 }	
 
@@ -300,13 +310,14 @@ public taskDuelThink(id, opponent)
 		
 		g_iTimer = get_pcvar_num(g_Pcvar[CVAR_TIMER]);
 		remove_task('x');
-		g_Pcvar[CVAR_COUNT] = register_cvar("kd_knifecount", "1");
+		g_bInChallenge = false;
+		g_bProtect = false;
 		if(is_user_alive(g_iChallenged)) user_kill(g_iChallenged);
 		if( is_user_alive(g_iChallenger))user_kill(g_iChallenger);
 		//client_cmd(0, "kill");
 		i_Counter = true;
 
-		for(new i = 0 ; i <= g_iMaxPlayers ; i++)
+		for(new i = 1 ; i <= g_iMaxPlayers ; i++)
 		{
 			if(!is_user_alive(i))
 				continue;
@@ -349,6 +360,8 @@ stock fm_entity_set_aim(id, ent, bone = 0)
 	
 	new Float:v_length;
 	v_length = vector_length(vOrigin);
+	if(v_length <= 0.0)
+		return 0;
 	
 	new Float:vAimVector[3];
 	vAimVector[0] = vOrigin[0] / v_length;
@@ -399,7 +412,7 @@ stock bool:check_players()
 
 stock get_opponent(team)
 {
-	for(new i = 0 ; i <= g_iMaxPlayers ; i++)
+	for(new i = 1 ; i <= g_iMaxPlayers ; i++)
 	{
 		if(!is_user_alive(i))
 			continue;
@@ -429,7 +442,12 @@ stock fm_get_speed_vector2(ent1, ent2, Float:speed, Float:new_velocity[3])
 	new_velocity[0] = vOrigin2[0] - vOrigin1[0];
 	new_velocity[1] = vOrigin2[1] - vOrigin1[1];
 	new_velocity[2] = vOrigin2[2] - vOrigin1[2];
-	new Float:fNum = floatsqroot(speed * speed / (new_velocity[0] * new_velocity[0] + new_velocity[1] * new_velocity[1] + new_velocity[2] * new_velocity[2]));
+
+	new Float:fVectorLength = (new_velocity[0] * new_velocity[0] + new_velocity[1] * new_velocity[1] + new_velocity[2] * new_velocity[2]);
+	if(fVectorLength <= 0.0)
+		return 0;
+
+	new Float:fNum = floatsqroot(speed * speed / fVectorLength);
 	new_velocity[0] *= fNum;
 	new_velocity[1] *= fNum;
 	new_velocity[2] *= fNum;
@@ -449,21 +467,7 @@ stock Float:fm_get_entity_distance(ent1, ent2)
 	return vector_distance(vOrigin1, vOrigin2);
 }
 
-public bomb_planted(){
-	i_Counter = false;
-}
-
-public bomb_planting()
-{
-	i_Counter = false;
-}
-
-public bomb_defusing(defuser)
-{
-	i_Counter = false;
-}
-
-public bomb_defused(defuser)
+public logevent_BombAction()
 {
 	i_Counter = false;
 }
