@@ -1,7 +1,6 @@
 #include <amxmodx>
 #include <fakemeta>
-#include <hamsandwich>
-#include <cstrike>
+#include <reapi>
 #include <amxmisc>
 //#include <csx>
 
@@ -12,9 +11,6 @@
 #define DESCRIPTION "Plugin for knife duel"
 
 #pragma semicolon 1
-
-#define CBASE_CURRWPN_ENT 373
-#define OFFSET_ENT_TO_INDEX 43
 
 new const g_szKnifeSound[] = "weapons/knife_hitwall1.wav";
 new const g_szSpawnClassname[] = "info_player_deathmatch";
@@ -52,7 +48,7 @@ public plugin_init() {
 	
 	register_forward(FM_EmitSound, "fwd_EmitSound", 1);
 	register_forward(FM_PlayerPreThink, "fwd_PlayerPreThink_post", 1);
-	RegisterHam(Ham_Killed, "player", "fwd_Killed", 1);
+	RegisterHookChain(RG_CBasePlayer_Killed, "fwd_Killed", true);
 	
 	register_logevent("logevent_RoundEnd", 2, "1=Round_End", "1=Round_Draw");
 	register_logevent("logevent_BombAction", 3, "2=Planted_The_Bomb");
@@ -131,14 +127,14 @@ public cmdForceDuel(id, level, cid)
 	}
 
 	new iAdminTeam = get_user_team(id);
-	if(iAdminTeam != 1 && iAdminTeam != 2)
+	if(iAdminTeam != _:TEAM_TERRORIST && iAdminTeam != _:TEAM_CT)
 	{
 		client_print(id, print_console, "[Knife Duel] Администратор должен находиться в команде T или CT.");
 		return PLUGIN_HANDLED;
 	}
 
 	new iChallenger = prepare_forced_duel(iAdminTeam, id);
-	new iOpponent = get_random_alive_player(3 - iAdminTeam);
+	new iOpponent = get_random_alive_player(get_opposite_team(iAdminTeam));
 
 	if(!is_user_alive(iChallenger) || !is_user_alive(iOpponent))
 	{
@@ -232,7 +228,7 @@ public fwd_EmitSound(id, channel, const sound[])
 	
 	if((iHitCount[id] >= get_pcvar_num(g_Pcvar[CVAR_COUNT])) && check_players() && !g_bInChallenge)
 	{
-		new iOpponent = get_opponent(3 - get_user_team(id));
+		new iOpponent = get_opponent(get_opposite_team(get_user_team(id)));
 		if(!iOpponent)
 			return FMRES_IGNORED;
 		
@@ -249,13 +245,10 @@ public fwd_PlayerPreThink_post(id)
 		return FMRES_IGNORED;
 	
 	static iWpn;
-	iWpn = get_pdata_cbase(id, CBASE_CURRWPN_ENT);
-	
-	if(pev_valid(iWpn))
-	{
-		if(get_pdata_int(iWpn, OFFSET_ENT_TO_INDEX) != CSW_KNIFE)
-			engclient_cmd(id, "weapon_knife");
-	}
+	iWpn = get_member(id, m_pActiveItem);
+
+	if(is_entity(iWpn) && get_member(iWpn, m_iId) != WEAPON_KNIFE)
+		engclient_cmd(id, "weapon_knife");
 	
 	static iOpponent;
 	if(id == g_iChallenged)
@@ -298,7 +291,7 @@ public fwd_Killed(id, idattacker, shouldgib)
 	}
 
 	if(!get_pcvar_num(g_Pcvar[CVAR_ANNOUNCE]))
-		return HAM_IGNORED;
+		return;
 	
 	if(check_players())
 	{
@@ -310,7 +303,7 @@ public fwd_Killed(id, idattacker, shouldgib)
 			client_print(i, print_chat, "Чтобы вызвать игрока на дуль, режь стену %d раз.", get_pcvar_num(g_Pcvar[CVAR_COUNT]));
 		}
 	}
-	return HAM_IGNORED;
+	return;
 }
 
 stock taskGrantReward(id, iReward)
@@ -335,7 +328,7 @@ stock give_money(id, amount)
 	if(amount <= 0)
 		return 0;
 
-	new iOldMoney = cs_get_user_money(id);
+	new iOldMoney = get_member(id, m_iAccount);
 	new iMoney = iOldMoney + amount;
 	if(iMoney > 16000)
 		iMoney = 16000;
@@ -344,7 +337,7 @@ stock give_money(id, amount)
 	if(iGranted <= 0)
 		return 0;
 
-	cs_set_user_money(id, iMoney, 0);
+	set_member(id, m_iAccount, iMoney);
 
 	message_begin(MSG_ONE, g_iMsgMoney, _, id);
 	write_long(iMoney);
@@ -597,9 +590,9 @@ stock bool:check_players()
 		if(!is_user_alive(i))
 			continue;
 		
-		if(get_user_team(i) == 1)
+		if(get_user_team(i) == _:TEAM_TERRORIST)
 			++iNum[0];
-		else if(get_user_team(i) == 2)
+		else if(get_user_team(i) == _:TEAM_CT)
 			++iNum[1];
 	}
 	if((iNum[0] == 1) && (iNum[1] == 1))
@@ -691,6 +684,17 @@ public logevent_BombAction()
 	i_Counter = false;
 }
 
+stock get_opposite_team(team)
+{
+	if(team == _:TEAM_TERRORIST)
+		return _:TEAM_CT;
+
+	if(team == _:TEAM_CT)
+		return _:TEAM_TERRORIST;
+
+	return 0;
+}
+
 public eNewRound()
 {
 	i_Counter = true;
@@ -698,7 +702,7 @@ public eNewRound()
 
 stock prepare_forced_duel(iAdminTeam, iAdmin)
 {
-	new iOpponentTeam = 3 - iAdminTeam;
+	new iOpponentTeam = get_opposite_team(iAdminTeam);
 
 	for(new i = 1; i <= g_iMaxPlayers; i++)
 	{
