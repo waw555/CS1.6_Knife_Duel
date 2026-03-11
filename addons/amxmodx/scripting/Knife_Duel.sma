@@ -2,7 +2,6 @@
 #include <fakemeta>
 #include <reapi>
 #include <amxmisc>
-#include <cstrike>
 //#include <csx>
 
 #define PLUGIN "Knife Duel"
@@ -327,7 +326,7 @@ stock give_money(id, amount)
 	if(amount <= 0)
 		return 0;
 
-	new iOldMoney = cs_get_user_money(id);
+	new iOldMoney = get_member(id, m_iAccount);
 	new iMoney = iOldMoney + amount;
 	if(iMoney > 16000)
 		iMoney = 16000;
@@ -336,7 +335,7 @@ stock give_money(id, amount)
 	if(iGranted <= 0)
 		return 0;
 
-	cs_set_user_money(id, iMoney, 1);
+	rg_add_account(id, iGranted, AS_ADD);
 
 	return iGranted;
 }
