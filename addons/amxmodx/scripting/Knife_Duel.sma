@@ -1,7 +1,7 @@
 #include <amxmodx>
 #include <fakemeta>
 #include <hamsandwich>
-//#include <cstrike>
+#include <cstrike>
 #include <amxmisc>
 //#include <csx>
 
@@ -32,6 +32,7 @@ new i_Counter = true;
 enum _:max_cvars {
 	CVAR_COUNT,
 	CVAR_TIMER,
+	CVAR_REWARD,
 	CVAR_MAXDISTANCE,
 	CVAR_PROTECTION,
 	CVAR_ANNOUNCE,
@@ -57,16 +58,23 @@ public plugin_init() {
 	
 	g_Pcvar[CVAR_COUNT] = register_cvar("kd_knifecount", "1");
 	g_Pcvar[CVAR_TIMER] = register_cvar("kd_preparetime", "30");
-	g_iTimer = get_pcvar_num(g_Pcvar[CVAR_TIMER]);
+	g_Pcvar[CVAR_REWARD] = register_cvar("kd_reward", "1000");
 	g_Pcvar[CVAR_PROTECTION] = register_cvar("kd_protection", "1");
 	g_Pcvar[CVAR_MAXDISTANCE] = register_cvar("kd_maxdistance", "99999");
 	g_Pcvar[CVAR_ANNOUNCE] = register_cvar("kd_announce", "1");
 	g_Pcvar[CVAR_RESET] = register_cvar("kd_resethp", "1");
+	g_iTimer = get_pcvar_num(g_Pcvar[CVAR_TIMER]);
 	g_iMaxPlayers = get_maxplayers();
 	g_iMsgRoundTime = get_user_msgid("RoundTime");
 	g_iMsgStatusIcon = get_user_msgid("StatusIcon");
 	register_event("RoundTime", "eNewRound", "bc");
 	register_concmd("kd_forceduel", "cmdForceDuel", ADMIN_BAN, "- Запустить ножевую дуэль, если в любой команде остался 1 игрок");
+}
+
+public plugin_cfg()
+{
+	server_cmd("exec addons/amxmodx/configs/plugins/knife_duel.cfg");
+	server_exec();
 }
 
 public cmdForceDuel(id, level, cid)
@@ -80,17 +88,15 @@ public cmdForceDuel(id, level, cid)
 		return PLUGIN_HANDLED;
 	}
 
-	new iLoneT = get_single_alive_player(1);
-	new iLoneCT = get_single_alive_player(2);
-
-	if(!iLoneT && !iLoneCT)
+	new iAdminTeam = get_user_team(id);
+	if(iAdminTeam != 1 && iAdminTeam != 2)
 	{
-		client_print(id, print_console, "[Knife Duel] В командах должно остаться по одному игроку хотя бы в одной из сторон.");
+		client_print(id, print_console, "[Knife Duel] Администратор должен находиться в команде T или CT.");
 		return PLUGIN_HANDLED;
 	}
 
-	new iChallenger = iLoneT ? iLoneT : iLoneCT;
-	new iOpponent = get_opponent(3 - get_user_team(iChallenger));
+	new iChallenger = prepare_forced_duel(iAdminTeam, id);
+	new iOpponent = get_random_alive_player(3 - iAdminTeam);
 
 	if(!is_user_alive(iChallenger) || !is_user_alive(iOpponent))
 	{
@@ -230,6 +236,35 @@ public fwd_PlayerPreThink_post(id)
 
 public fwd_Killed(id, idattacker, shouldgib)
 {
+	if(g_bInChallenge && (id == g_iChallenged || id == g_iChallenger))
+	{
+		new iWinner = (id == g_iChallenged) ? g_iChallenger : g_iChallenged;
+		if(is_user_connected(iWinner) && is_user_alive(iWinner))
+		{
+			new iReward = get_pcvar_num(g_Pcvar[CVAR_REWARD]);
+			if(iReward > 0)
+			{
+				new iMoney = cs_get_user_money(iWinner) + iReward;
+				if(iMoney > 16000)
+					iMoney = 16000;
+
+				cs_set_user_money(iWinner, iMoney, 1);
+
+				new szWinner[32];
+				get_user_name(iWinner, szWinner, charsmax(szWinner));
+				client_print(0, print_chat, " [Knife Duel] Победитель %s получает награду $%d.", szWinner, iReward);
+			}
+		}
+
+		g_bInChallenge = false;
+		g_bProtect = false;
+		remove_task('x');
+		remove_task('t');
+		show_duel_weapon_icon(0);
+		server_cmd("amx_throwknives 1");
+		i_Counter = true;
+	}
+
 	if(!get_pcvar_num(g_Pcvar[CVAR_ANNOUNCE]))
 		return HAM_IGNORED;
 	
@@ -351,7 +386,7 @@ public taskDuelThink(id, opponent)
 	if(g_iTimer > 0)
 	{
 		set_dhudmessage(255, 100, 0, -1.0, 0.02, 0, 0.0, 1.1, 0.0, 0.0);
-		show_dhudmessage(0, "У вас осталось: %d сек.", g_iTimer--);
+		show_dhudmessage(0, "У вас осталось: %d сек.^nНАГРАДА - $%d", g_iTimer--, get_pcvar_num(g_Pcvar[CVAR_REWARD]));
 		}
 	
 	else
@@ -581,4 +616,49 @@ public logevent_BombAction()
 public eNewRound()
 {
 	i_Counter = true;
+}
+
+stock prepare_forced_duel(iAdminTeam, iAdmin)
+{
+	new iOpponentTeam = 3 - iAdminTeam;
+
+	for(new i = 1; i <= g_iMaxPlayers; i++)
+	{
+		if(!is_user_alive(i) || get_user_team(i) != iAdminTeam || i == iAdmin)
+			continue;
+
+		user_kill(i);
+	}
+
+	new iKeepOpponent = get_random_alive_player(iOpponentTeam);
+
+	for(new i = 1; i <= g_iMaxPlayers; i++)
+	{
+		if(!is_user_alive(i) || get_user_team(i) != iOpponentTeam || i == iKeepOpponent)
+			continue;
+
+		user_kill(i);
+	}
+
+	if(!is_user_alive(iAdmin) || get_user_team(iAdmin) != iAdminTeam)
+		return get_single_alive_player(iAdminTeam);
+
+	return iAdmin;
+}
+
+stock get_random_alive_player(team)
+{
+	new iPlayers[32], iCount;
+	for(new i = 1; i <= g_iMaxPlayers; i++)
+	{
+		if(!is_user_alive(i) || get_user_team(i) != team)
+			continue;
+
+		iPlayers[iCount++] = i;
+	}
+
+	if(!iCount)
+		return 0;
+
+	return iPlayers[random(iCount)];
 }
