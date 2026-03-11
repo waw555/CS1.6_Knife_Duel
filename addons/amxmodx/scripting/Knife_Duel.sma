@@ -39,7 +39,6 @@ enum _:max_cvars {
 };
 new g_Pcvar[max_cvars];
 
-new g_iFwdSpawn;
 new g_iMaxPlayers;
 
 public plugin_init() {
@@ -106,7 +105,7 @@ public plugin_precache()
 	precache_generic("sound/ms/knife_duel_menu.mp3");
 	precache_generic("sound/ms/knife_duel_stop.mp3");
 	precache_generic("sound/ms/knife_duel_start.mp3");
-	g_iFwdSpawn = register_forward(FM_Spawn, "fwd_Spawn", 1);
+	register_forward(FM_Spawn, "fwd_Spawn", 1);
 }
 
 public client_disconnected(id)
