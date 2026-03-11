@@ -44,6 +44,7 @@ new g_Pcvar[max_cvars];
 new g_iMaxPlayers;
 new g_iMsgRoundTime;
 new g_iMsgStatusIcon;
+new g_iPendingReward[33];
 
 public plugin_init() {
 	
@@ -284,15 +285,8 @@ public fwd_Killed(id, idattacker, shouldgib)
 			new iReward = get_pcvar_num(g_Pcvar[CVAR_REWARD]);
 			if(iReward > 0)
 			{
-				new iMoney = cs_get_user_money(iWinner) + iReward;
-				if(iMoney > 16000)
-					iMoney = 16000;
-
-				cs_set_user_money(iWinner, iMoney, 1);
-
-				new szWinner[32];
-				get_user_name(iWinner, szWinner, charsmax(szWinner));
-				client_print(0, print_chat, " [Knife Duel] Победитель %s получает награду $%d.", szWinner, iReward);
+				g_iPendingReward[iWinner] += iReward;
+				set_task(0.2, "taskGrantReward", iWinner);
 			}
 		}
 
@@ -319,6 +313,28 @@ public fwd_Killed(id, idattacker, shouldgib)
 		}
 	}
 	return HAM_IGNORED;
+}
+
+public taskGrantReward(id)
+{
+	if(!is_user_connected(id))
+		return;
+
+	new iReward = g_iPendingReward[id];
+	if(iReward <= 0)
+		return;
+
+	g_iPendingReward[id] = 0;
+
+	new iMoney = cs_get_user_money(id) + iReward;
+	if(iMoney > 16000)
+		iMoney = 16000;
+
+	cs_set_user_money(id, iMoney, 1);
+
+	new szWinner[32];
+	get_user_name(id, szWinner, charsmax(szWinner));
+	client_print(0, print_chat, " [Knife Duel] Победитель %s получает награду $%d.", szWinner, iReward);
 }
 
 public fnChallenge(id, opponent)
