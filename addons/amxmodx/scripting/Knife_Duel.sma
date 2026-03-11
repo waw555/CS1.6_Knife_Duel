@@ -2,7 +2,7 @@
 #include <fakemeta>
 #include <hamsandwich>
 //#include <cstrike>
-//#include <amxmisc>
+#include <amxmisc>
 //#include <csx>
 
 #define PLUGIN "Knife Duel"
@@ -63,6 +63,42 @@ public plugin_init() {
 	g_Pcvar[CVAR_RESET] = register_cvar("kd_resethp", "1");
 	g_iMaxPlayers = get_maxplayers();
 	register_event("RoundTime", "eNewRound", "bc");
+	register_concmd("kd_forceduel", "cmdForceDuel", ADMIN_BAN, "- Запустить ножевую дуэль, если в любой команде остался 1 игрок");
+}
+
+public cmdForceDuel(id, level, cid)
+{
+	if(!cmd_access(id, level, cid, 1))
+		return PLUGIN_HANDLED;
+
+	if(g_bInChallenge)
+	{
+		client_print(id, print_console, "[Knife Duel] Дуэль уже запущена.");
+		return PLUGIN_HANDLED;
+	}
+
+	new iLoneT = get_single_alive_player(1);
+	new iLoneCT = get_single_alive_player(2);
+
+	if(!iLoneT && !iLoneCT)
+	{
+		client_print(id, print_console, "[Knife Duel] В командах должно остаться по одному игроку хотя бы в одной из сторон.");
+		return PLUGIN_HANDLED;
+	}
+
+	new iChallenger = iLoneT ? iLoneT : iLoneCT;
+	new iOpponent = get_opponent(3 - get_user_team(iChallenger));
+
+	if(!is_user_alive(iChallenger) || !is_user_alive(iOpponent))
+	{
+		client_print(id, print_console, "[Knife Duel] Не удалось подобрать участников дуэли.");
+		return PLUGIN_HANDLED;
+	}
+
+	fnChallenge(iChallenger, iOpponent);
+	client_print(id, print_console, "[Knife Duel] Принудительная дуэль запущена.");
+
+	return PLUGIN_HANDLED;
 }
 
 public plugin_precache()
@@ -408,6 +444,27 @@ stock bool:check_players()
 		return true;
 	
 	return false;
+}
+
+stock get_single_alive_player(team)
+{
+	new iFound;
+
+	for(new i = 1 ; i <= g_iMaxPlayers ; i++)
+	{
+		if(!is_user_alive(i))
+			continue;
+
+		if(get_user_team(i) != team)
+			continue;
+
+		if(iFound)
+			return 0;
+
+		iFound = i;
+	}
+
+	return iFound;
 }
 
 stock get_opponent(team)
